@@ -58,9 +58,9 @@ def save_log(user_message, intent, entities, bot_response):
     conn.close()
 
 # --- Users & Dummy Data ---
-users = {"teja": "srt123", "sri": "bank123", "admin": "admin123"}
+users = {"yesh": "srt123", "reddy": "bank123", "admin": "admin123"}
 
-account_profile = {"name": "Teja", "number": "96182240", "type": "Savings", "balance": 75000.00}
+account_profile = {"name": "Yesh", "number": "96182240", "type": "Savings", "balance": 75000.00}
 transactions = [
     {"date": "2025-08-20", "desc": "Zomato Order", "amount": -450.00},
     {"date": "2025-08-18", "desc": "Amazon Purchase", "amount": -2999.00},

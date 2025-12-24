@@ -1,14 +1,16 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from datetime import datetime
 
 # =====================================================
-# FLASK APP CONFIG (CRITICAL FOR YOUR ZIP STRUCTURE)
+# DYNAMIC PATH RESOLUTION (FIXES RAILWAY 500)
 # =====================================================
-app = Flask(
-    __name__,
-    template_folder="bankbot/templates",
-    static_folder="bankbot/static"
-)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+TEMPLATE_DIR = os.path.join(BASE_DIR, "bankbot", "templates")
+STATIC_DIR = os.path.join(BASE_DIR, "bankbot", "static")
+
+app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.secret_key = "yesh_bank_secret_key"
 
 # =====================================================
@@ -61,7 +63,7 @@ def is_admin():
     return session.get("user") == "admin"
 
 # =====================================================
-# ROUTES — PUBLIC
+# ROUTES
 # =====================================================
 @app.route("/")
 def index():
@@ -70,7 +72,6 @@ def index():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        # robust field handling (fixes admin login)
         u = (
             request.form.get("username")
             or request.form.get("user")
@@ -83,9 +84,7 @@ def login():
 
         if u and p and users.get(u) == p:
             session["user"] = u
-            return redirect(
-                url_for("admin_home") if u == "admin" else url_for("dashboard")
-            )
+            return redirect(url_for("admin_home") if u == "admin" else url_for("dashboard"))
 
         flash("Invalid credentials", "danger")
 
@@ -96,9 +95,6 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# =====================================================
-# ROUTES — USER PAGES
-# =====================================================
 @app.route("/dashboard")
 def dashboard():
     if not logged_in():
@@ -139,14 +135,8 @@ def branches_page():
 def chatbot():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template(
-        "chatbot.html",
-        now=datetime.now().strftime("%d %b %Y, %I:%M %p")
-    )
+    return render_template("chatbot.html", now=datetime.now().strftime("%d %b %Y, %I:%M %p"))
 
-# =====================================================
-# ROUTES — ADMIN
-# =====================================================
 @app.route("/admin")
 def admin_home():
     if not is_admin():

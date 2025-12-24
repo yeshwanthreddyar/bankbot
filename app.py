@@ -3,7 +3,7 @@ from datetime import datetime
 import spacy, os, csv, random, sqlite3, pandas as pd, subprocess
 
 app = Flask(__name__)
-app.secret_key = "srt_bank_secret_key"
+app.secret_key = "yesh_bank_secret_key"
 
 # --- Load AI Model ---
 def load_model():
@@ -70,9 +70,9 @@ transactions = [
 cards_info = {"debit": {"status": "Active", "last4": "4321"}, "credit": {"status": "Active", "last4": "9988"}}
 loans_catalog = [{"type": "Personal Loan", "rate": "11.25% p.a."}, {"type": "Home Loan", "rate": "8.50% p.a."}]
 branches = [
-    {"city": "Hyderabad", "name": "SRT Bank - HiTech City", "address": "Plot 21, Cyber Towers", "ifsc": "SRTB0000123"},
-    {"city": "Bengaluru", "name": "SRT Bank - Indiranagar", "address": "100ft Rd, HAL 2nd Stage", "ifsc": "SRTB0000456"},
-    {"city": "Mumbai", "name": "SRT Bank - BKC", "address": "G Block, Bandra Kurla Complex", "ifsc": "SRTB0000789"},
+    {"city": "Hyderabad", "name": "Yesh Bank - HiTech City", "address": "Plot 21, Cyber Towers", "ifsc": "YESHB0000123"},
+    {"city": "Bengaluru", "name": "Yesh Bank - Indiranagar", "address": "100ft Rd, HAL 2nd Stage", "ifsc": "YESHB0000456"},
+    {"city": "Mumbai", "name": "Yesh Bank - BKC", "address": "G Block, Bandra Kurla Complex", "ifsc": "YESHB0000789"},
 ]
 
 def logged_in(): return "user" in session and session["user"] != "admin"

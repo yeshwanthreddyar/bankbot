@@ -401,11 +401,10 @@ def retrain_model():
         return redirect(url_for("login"))
 
     try:
-        subprocess.run(["python", "train.py"], check=True)
-        load_model()
-        flash("Model retrained successfully", "success")
+        subprocess.Popen(["python", "train.py"])
+        flash("🔄 Model retraining started in background", "success")
     except Exception as e:
-        flash(f"Retrain failed: {e}", "danger")
+        flash(f"❌ Failed to start retraining: {e}", "danger")
 
     return redirect(url_for("admin_home"))
 

@@ -1,28 +1,27 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from datetime import datetime
-import spacy, os, csv, random, sqlite3, pandas as pd, subprocess
+import os, csv, random, sqlite3, pandas as pd
 
 app = Flask(__name__)
 app.secret_key = "yesh_bank_secret_key"
 
-# ---------------- LOAD AI MODEL ----------------
-def load_model():
-    global nlp_model
+# ================= SAFE SPACY LOADING =================
+try:
+    import spacy
     try:
         nlp_model = spacy.load("bank_nlu_model")
-        print("✅ NLU model loaded")
+        print("✅ Custom spaCy model loaded")
     except:
-        nlp_model = None
-        print("❌ NLU model not found")
+        nlp_model = spacy.blank("en")
+        print("⚠️ Using blank spaCy model")
+except:
+    nlp_model = None
+    print("❌ spaCy not available")
 
-load_model()
-
-# ---------------- LOAD RESPONSES ----------------
+# ================= LOAD RESPONSES =================
 responses_dict = {}
 
 def load_responses():
-    global responses_dict
-    responses_dict = {}
     if not os.path.exists("training_and_responses.csv"):
         return
     df = pd.read_csv(
@@ -36,8 +35,8 @@ def load_responses():
 
 load_responses()
 
-# ---------------- DATABASE LOGGING ----------------
-def save_log(user_message, intent, entities, bot_response):
+# ================= DATABASE LOGGING =================
+def save_log(user_message, intent, bot_response):
     conn = sqlite3.connect("logs.db")
     cur = conn.cursor()
     cur.execute("""
@@ -45,163 +44,77 @@ def save_log(user_message, intent, entities, bot_response):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_message TEXT,
             intent TEXT,
-            entities TEXT,
             bot_response TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
     cur.execute(
-        "INSERT INTO logs (user_message, intent, entities, bot_response) VALUES (?, ?, ?, ?)",
-        (user_message, intent, str(entities), bot_response)
+        "INSERT INTO logs (user_message, intent, bot_response) VALUES (?, ?, ?)",
+        (user_message, intent, bot_response)
     )
     conn.commit()
     conn.close()
 
-# ---------------- DUMMY DATA ----------------
-users = {"yesh": "yesh123", "reddy": "bank123", "admin": "admin123"}
+# ================= DUMMY DATA =================
+users = {"yesh": "yesh123"}
 
 account_profile = {
-    "name": "Yesh",
     "number": "96182240",
-    "type": "Savings",
     "balance": 75000.00
 }
 
-transactions = [
-    {"date": "2025-08-20", "desc": "Zomato Order", "amount": -450.00},
-    {"date": "2025-08-18", "desc": "Amazon Purchase", "amount": -2999.00},
-    {"date": "2025-08-15", "desc": "Flipkart Refund", "amount": 1500.00},
-    {"date": "2025-08-10", "desc": "Rent Payment", "amount": -15000.00},
-]
-
-cards_info = {
-    "debit": {"status": "Active", "last4": "4321"},
-    "credit": {"status": "Active", "last4": "9988"}
-}
-
-loans_catalog = [
-    {"type": "Personal Loan", "rate": "11.25% p.a."},
-    {"type": "Home Loan", "rate": "8.50% p.a."}
-]
-
-branches = [
-    {"city": "Hyderabad", "name": "Yesh Bank - HiTech City", "address": "Plot 21, Cyber Towers", "ifsc": "YESHB0000123"},
-    {"city": "Bengaluru", "name": "Yesh Bank - Indiranagar", "address": "100ft Rd, HAL 2nd Stage", "ifsc": "YESHB0000456"},
-    {"city": "Mumbai", "name": "Yesh Bank - BKC", "address": "G Block, Bandra Kurla Complex", "ifsc": "YESHB0000789"},
-]
-
 def logged_in():
-    return "user" in session and session["user"] != "admin"
+    return "user" in session
 
-def is_admin():
-    return session.get("user") == "admin"
-
-# ================== ROUTES ==================
-
+# ================= ROUTES =================
 @app.route("/")
 def home():
-    # FIX FOR 404
-    if logged_in():
-        return redirect(url_for("chatbot"))
-    return redirect(url_for("login"))
+    return "✅ BankBot is running successfully"
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        u = request.form.get("username", "").strip()
-        p = request.form.get("password", "").strip()
-        if u in users and users[u] == p:
+        u = request.form.get("username")
+        p = request.form.get("password")
+        if users.get(u) == p:
             session["user"] = u
             return redirect(url_for("chatbot"))
-        flash("Invalid credentials", "danger")
+        flash("Invalid credentials")
     return render_template("login.html")
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
 
 @app.route("/chatbot")
 def chatbot():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template("chatbot.html", now=datetime.now().strftime("%d %b %Y, %I:%M %p"))
+    return render_template("chatbot.html")
 
-# ================== CHAT API ==================
+# ================= CHAT API =================
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     if not logged_in():
-        return jsonify({"reply": "Authentication error", "intent": "error"})
+        return jsonify({"reply": "Authentication error"})
 
-    data = request.get_json() or {}
-    message = (data.get("message") or "").strip()
+    message = request.get_json().get("message", "").strip()
 
-    state = session.get("conversation_state")
-    transfer = session.get("transfer_details", {})
-
-    # ----- BALANCE FLOW -----
-    if state == "awaiting_account_number":
-        acc = message.replace(" ", "")
-        if acc == account_profile["number"]:
-            reply = f"💰 Your account balance is ₹{account_profile['balance']:.2f}"
-        else:
-            reply = "⚠️ Invalid account number."
-        session.pop("conversation_state", None)
-        save_log(message, "check_balance", [], reply)
-        return jsonify({"reply": reply, "intent": "check_balance"})
-
-    # ----- TRANSFER FLOW -----
-    if state == "awaiting_recipient":
-        session["transfer_details"] = {"recipient": message}
-        session["conversation_state"] = "awaiting_amount"
-        return jsonify({"reply": f"💸 How much to send to {message}?", "intent": "transfer_money"})
-
-    if state == "awaiting_amount":
-        try:
-            amt = float(message.replace("₹", "").replace(",", ""))
-            if amt <= 0:
-                reply = "⚠️ Enter valid amount"
-            elif amt > account_profile["balance"]:
-                reply = "⚠️ Insufficient balance"
-            else:
-                transfer["amount"] = amt
-                session["transfer_details"] = transfer
-                session["conversation_state"] = "awaiting_confirmation"
-                reply = f"💡 Confirm sending ₹{amt:.2f} to {transfer['recipient']}? (yes/no)"
-        except:
-            reply = "⚠️ Enter numeric amount only"
-        return jsonify({"reply": reply, "intent": "transfer_money"})
-
-    if state == "awaiting_confirmation":
-        if message.lower() in ["yes", "y"]:
-            amt = transfer["amount"]
-            account_profile["balance"] -= amt
-            reply = f"✅ Transfer successful. New balance ₹{account_profile['balance']:.2f}"
-        else:
-            reply = "❌ Transfer cancelled"
-        session.pop("conversation_state", None)
-        session.pop("transfer_details", None)
-        return jsonify({"reply": reply, "intent": "transfer_money"})
-
-    # ----- INTENT PREDICTION -----
-    doc = nlp_model(message)
-    intent = max(doc.cats, key=doc.cats.get) if doc.cats else "n/a"
-
-    if intent == "check_balance":
-        session["conversation_state"] = "awaiting_account_number"
+    if "balance" in message.lower():
+        session["state"] = "awaiting_account"
         reply = "💰 Please enter your account number"
-    elif intent == "transfer_money":
-        session["conversation_state"] = "awaiting_recipient"
-        session["transfer_details"] = {}
-        reply = "💸 Who should I send money to?"
-    elif doc.cats.get(intent, 0) > 0.65:
-        reply = random.choice(responses_dict.get(intent, ["I can help with banking queries"]))
-    else:
-        reply = "I can assist with banking services only"
+        save_log(message, "check_balance", reply)
+        return jsonify({"reply": reply})
 
-    save_log(message, intent, [], reply)
-    return jsonify({"reply": reply, "intent": intent})
+    if session.get("state") == "awaiting_account":
+        if message == account_profile["number"]:
+            reply = f"💰 Your balance is ₹{account_profile['balance']:.2f}"
+        else:
+            reply = "⚠️ Invalid account number"
+        session.pop("state", None)
+        save_log(message, "check_balance", reply)
+        return jsonify({"reply": reply})
 
-# ---------------- RUN (DEPLOYMENT SAFE) ----------------
+    reply = "I can help with balance enquiries"
+    save_log(message, "fallback", reply)
+    return jsonify({"reply": reply})
+
+# ================= RUN =================
 if __name__ == "__main__":
     app.run()

@@ -6,11 +6,7 @@ import spacy, csv, random, sqlite3, pandas as pd, subprocess
 # ================= PATH FIX (THIS IS THE KEY) =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = Flask(
-    __name__,
-    template_folder="bankbot/templates",
-    static_folder="bankbot/static"
-)
+app = Flask(__name__)
 
 app.secret_key = "yesh_bank_secret_key"
 

@@ -280,6 +280,60 @@ def admin_home():
         session=session
     )
 
+@app.route("/admin/logs")
+def view_logs():
+    if not is_admin():
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect(os.path.join(BASE_DIR, "logs.db"))
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT 50")
+    logs = cur.fetchall()
+    conn.close()
+
+    return render_template("admin_logs.html", logs=logs)
+@app.route("/admin/training", methods=["GET", "POST"])
+def admin_training():
+    if not is_admin():
+        return redirect(url_for("login"))
+
+    file_path = os.path.join(BASE_DIR, "training_and_responses.csv")
+
+    if request.method == "POST":
+        intent = request.form.get("intent")
+        example = request.form.get("example")
+        response = request.form.get("response")
+
+        if intent and example and response:
+            with open(file_path, "a", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow([example, intent, response, "admin"])
+
+            flash("Training data added successfully", "success")
+            load_responses()
+        else:
+            flash("All fields are required", "danger")
+
+    rows = []
+    if os.path.exists(file_path):
+        df = pd.read_csv(file_path, header=None)
+        rows = df.values.tolist()
+
+    return render_template("admin_training.html", rows=rows)
+@app.route("/admin/retrain", methods=["POST"])
+def retrain_model():
+    if not is_admin():
+        return redirect(url_for("login"))
+
+    try:
+        subprocess.run(["python", "train.py"], check=True)
+        load_model()
+        load_responses()
+        flash("Model retrained successfully", "success")
+    except Exception as e:
+        flash(f"Retraining failed: {e}", "danger")
+
+    return redirect(url_for("admin_home"))
 
 
 # ================= RUN =================

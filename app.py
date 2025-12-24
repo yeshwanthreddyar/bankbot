@@ -273,10 +273,13 @@ def api_chat():
 def admin_home():
     if not is_admin():
         return redirect(url_for("login"))
+
     return render_template(
         "admin_home.html",
-        user=session.get("user")
+        user=session.get("user", "admin"),
+        session=session
     )
+
 
 
 # ================= RUN =================

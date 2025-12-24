@@ -1,10 +1,9 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from datetime import datetime
+import spacy, csv, random, sqlite3, pandas as pd, subprocess
 
-# =====================================================
-# DYNAMIC PATH RESOLUTION (FIXES RAILWAY 500)
-# =====================================================
+# ================= PATH FIX (THIS IS THE KEY) =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
@@ -15,18 +14,64 @@ app = Flask(
 
 app.secret_key = "yesh_bank_secret_key"
 
-# =====================================================
-# USERS
-# =====================================================
+# ================= LOAD AI MODEL =================
+def load_model():
+    global nlp_model
+    try:
+        nlp_model = spacy.load("bank_nlu_model")
+        print("✅ NLU model loaded")
+    except Exception as e:
+        nlp_model = None
+        print("❌ NLU model not found:", e)
+
+load_model()
+
+# ================= LOAD RESPONSES =================
+responses_dict = {}
+
+def load_responses():
+    global responses_dict
+    responses_dict = {}
+    path = os.path.join(BASE_DIR, "training_and_responses.csv")
+    if not os.path.exists(path):
+        return
+    df = pd.read_csv(path, header=None,
+                     names=["example", "intent", "response", "source"],
+                     on_bad_lines="skip")
+    for _, row in df.iterrows():
+        responses_dict.setdefault(row["intent"], []).append(row["response"])
+
+load_responses()
+
+# ================= DATABASE LOGGING =================
+def save_log(user_message, intent, entities, bot_response):
+    conn = sqlite3.connect(os.path.join(BASE_DIR, "logs.db"))
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_message TEXT,
+            intent TEXT,
+            entities TEXT,
+            bot_response TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cur.execute(
+        "INSERT INTO logs (user_message, intent, entities, bot_response) VALUES (?, ?, ?, ?)",
+        (user_message, intent, str(entities), bot_response)
+    )
+    conn.commit()
+    conn.close()
+
+# ================= USERS =================
 users = {
     "yesh": "yesh123",
     "reddy": "bank123",
     "admin": "admin123"
 }
 
-# =====================================================
-# DATA
-# =====================================================
+# ================= DUMMY DATA =================
 account_profile = {
     "name": "Yesh",
     "number": "96182240",
@@ -35,9 +80,10 @@ account_profile = {
 }
 
 transactions = [
-    {"date": "2025-08-20", "desc": "Zomato Order", "amount": -450},
-    {"date": "2025-08-18", "desc": "Amazon Purchase", "amount": -2999},
-    {"date": "2025-08-15", "desc": "Flipkart Refund", "amount": 1500},
+    {"date": "2025-08-20", "desc": "Zomato Order", "amount": -450.00},
+    {"date": "2025-08-18", "desc": "Amazon Purchase", "amount": -2999.00},
+    {"date": "2025-08-15", "desc": "Flipkart Refund", "amount": 1500.00},
+    {"date": "2025-08-10", "desc": "Rent Payment", "amount": -15000.00},
 ]
 
 cards_info = {
@@ -51,22 +97,18 @@ loans_catalog = [
 ]
 
 branches = [
-    {"city": "Hyderabad", "name": "Yesh Bank - HiTech City", "ifsc": "YESHB0000123"},
-    {"city": "Bengaluru", "name": "Yesh Bank - Indiranagar", "ifsc": "YESHB0000456"},
+    {"city": "Hyderabad", "name": "Yesh Bank - HiTech City", "address": "Plot 21, Cyber Towers", "ifsc": "YESHB0000123"},
+    {"city": "Bengaluru", "name": "Yesh Bank - Indiranagar", "address": "100ft Rd, HAL 2nd Stage", "ifsc": "YESHB0000456"},
+    {"city": "Mumbai", "name": "Yesh Bank - BKC", "address": "G Block, Bandra Kurla Complex", "ifsc": "YESHB0000789"},
 ]
 
-# =====================================================
-# HELPERS
-# =====================================================
 def logged_in():
     return "user" in session and session["user"] != "admin"
 
 def is_admin():
     return session.get("user") == "admin"
 
-# =====================================================
-# ROUTES
-# =====================================================
+# ================= ROUTES =================
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -74,22 +116,12 @@ def index():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        u = (
-            request.form.get("username")
-            or request.form.get("user")
-            or request.form.get("email")
-        )
-        p = (
-            request.form.get("password")
-            or request.form.get("pass")
-        )
-
-        if u and p and users.get(u) == p:
+        u = request.form.get("username", "").strip()
+        p = request.form.get("password", "").strip()
+        if u in users and users[u] == p:
             session["user"] = u
-            return redirect(url_for("admin_home") if u == "admin" else url_for("dashboard"))
-
+            return redirect(url_for("dashboard"))
         flash("Invalid credentials", "danger")
-
     return render_template("login.html")
 
 @app.route("/logout")
@@ -101,7 +133,7 @@ def logout():
 def dashboard():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template("dashboard.html", user=session["user"])
+    return render_template("dashboard.html")
 
 @app.route("/balance")
 def balance():
@@ -115,17 +147,17 @@ def transactions_page():
         return redirect(url_for("login"))
     return render_template("transactions.html", txns=transactions)
 
-@app.route("/cards")
-def cards():
-    if not logged_in():
-        return redirect(url_for("login"))
-    return render_template("cards.html", cards=cards_info)
-
 @app.route("/loans")
 def loans():
     if not logged_in():
         return redirect(url_for("login"))
     return render_template("loans.html", loans=loans_catalog)
+
+@app.route("/cards")
+def cards():
+    if not logged_in():
+        return redirect(url_for("login"))
+    return render_template("cards.html", cards=cards_info)
 
 @app.route("/branches")
 def branches_page():
@@ -137,7 +169,8 @@ def branches_page():
 def chatbot():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template("chatbot.html", now=datetime.now().strftime("%d %b %Y, %I:%M %p"))
+    return render_template("chatbot.html",
+                           now=datetime.now().strftime("%d %b %Y, %I:%M %p"))
 
 @app.route("/admin")
 def admin_home():
@@ -145,20 +178,6 @@ def admin_home():
         return redirect(url_for("login"))
     return render_template("admin_home.html")
 
-@app.route("/admin/logs")
-def admin_logs():
-    if not is_admin():
-        return redirect(url_for("login"))
-    return render_template("admin_logs.html")
-
-@app.route("/admin/training")
-def admin_training():
-    if not is_admin():
-        return redirect(url_for("login"))
-    return render_template("admin_training.html")
-
-# =====================================================
-# RUN
-# =====================================================
+# ================= RUN =================
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=8080)

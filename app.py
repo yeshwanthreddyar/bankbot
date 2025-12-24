@@ -116,6 +116,11 @@ def logged_in():
 
 def is_admin():
     return session.get("user") == "admin"
+def current_user_data():
+    username = session.get("user")
+    if not username:
+        return None
+    return user_accounts.get(username)
 
 # ================= ROUTES =================
 @app.route("/")
@@ -155,13 +160,27 @@ def dashboard():
 def balance():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template("balance.html", profile=account_profile)
+
+    data = current_user_data()
+    if not data:
+        flash("User data not found", "danger")
+        return redirect(url_for("dashboard"))
+
+    return render_template("balance.html", profile=data["profile"])
+
 
 @app.route("/transactions")
 def transactions_page():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template("transactions.html", txns=transactions)
+
+    data = current_user_data()
+    if not data:
+        flash("User data not found", "danger")
+        return redirect(url_for("dashboard"))
+
+    return render_template("transactions.html", txns=data["transactions"])
+
 
 @app.route("/loans")
 def loans():
@@ -293,6 +312,7 @@ def admin_home():
         session=session
     )
 
+# ================= ADMIN LOGS =================
 @app.route("/admin/logs")
 def view_logs():
     if not is_admin():
@@ -305,6 +325,9 @@ def view_logs():
     conn.close()
 
     return render_template("admin_logs.html", logs=logs)
+
+
+# ================= ADMIN TRAINING =================
 @app.route("/admin/training", methods=["GET", "POST"])
 def admin_training():
     if not is_admin():
@@ -321,11 +344,7 @@ def admin_training():
             with open(file_path, "a", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow([example, intent, response, "admin"])
-
-            flash("Training data added successfully", "success")
-            load_responses()
-        else:
-            flash("All fields are required", "danger")
+            flash("Training data added", "success")
 
     rows = []
     if os.path.exists(file_path):
@@ -333,6 +352,22 @@ def admin_training():
         rows = df.values.tolist()
 
     return render_template("admin_training.html", rows=rows)
+
+
+@app.route("/admin/training/delete/<int:row_index>", methods=["POST"])
+def delete_training_row(row_index):
+    if not is_admin():
+        return redirect(url_for("login"))
+
+    file_path = os.path.join(BASE_DIR, "training_and_responses.csv")
+    df = pd.read_csv(file_path, header=None)
+    df = df.drop(row_index).reset_index(drop=True)
+    df.to_csv(file_path, index=False, header=False)
+
+    flash("Row deleted", "success")
+    return redirect(url_for("admin_training"))
+
+
 @app.route("/admin/retrain", methods=["POST"])
 def retrain_model():
     if not is_admin():
@@ -341,13 +376,11 @@ def retrain_model():
     try:
         subprocess.run(["python", "train.py"], check=True)
         load_model()
-        load_responses()
         flash("Model retrained successfully", "success")
     except Exception as e:
-        flash(f"Retraining failed: {e}", "danger")
+        flash(f"Retrain failed: {e}", "danger")
 
     return redirect(url_for("admin_home"))
-
 
 # ================= RUN =================
 if __name__ == "__main__":

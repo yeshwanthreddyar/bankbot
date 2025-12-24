@@ -1,9 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from datetime import datetime
 
-# =================================================
-# APP CONFIG — IMPORTANT
-# =================================================
+# =====================================================
+# FLASK APP CONFIG (CRITICAL FOR YOUR ZIP STRUCTURE)
+# =====================================================
 app = Flask(
     __name__,
     template_folder="bankbot/templates",
@@ -11,18 +11,18 @@ app = Flask(
 )
 app.secret_key = "yesh_bank_secret_key"
 
-# =================================================
-# DUMMY USERS
-# =================================================
+# =====================================================
+# USERS
+# =====================================================
 users = {
     "yesh": "yesh123",
     "reddy": "bank123",
     "admin": "admin123"
 }
 
-# =================================================
+# =====================================================
 # DATA
-# =================================================
+# =====================================================
 account_profile = {
     "name": "Yesh",
     "number": "96182240",
@@ -51,18 +51,18 @@ branches = [
     {"city": "Bengaluru", "name": "Yesh Bank - Indiranagar", "ifsc": "YESHB0000456"},
 ]
 
-# =================================================
+# =====================================================
 # HELPERS
-# =================================================
+# =====================================================
 def logged_in():
     return "user" in session and session["user"] != "admin"
 
 def is_admin():
     return session.get("user") == "admin"
 
-# =================================================
+# =====================================================
 # ROUTES — PUBLIC
-# =================================================
+# =====================================================
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -70,12 +70,25 @@ def index():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        u = request.form.get("username")
-        p = request.form.get("password")
-        if users.get(u) == p:
+        # robust field handling (fixes admin login)
+        u = (
+            request.form.get("username")
+            or request.form.get("user")
+            or request.form.get("email")
+        )
+        p = (
+            request.form.get("password")
+            or request.form.get("pass")
+        )
+
+        if u and p and users.get(u) == p:
             session["user"] = u
-            return redirect(url_for("dashboard" if u != "admin" else "admin_home"))
+            return redirect(
+                url_for("admin_home") if u == "admin" else url_for("dashboard")
+            )
+
         flash("Invalid credentials", "danger")
+
     return render_template("login.html")
 
 @app.route("/logout")
@@ -83,9 +96,9 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# =================================================
+# =====================================================
 # ROUTES — USER PAGES
-# =================================================
+# =====================================================
 @app.route("/dashboard")
 def dashboard():
     if not logged_in():
@@ -131,9 +144,9 @@ def chatbot():
         now=datetime.now().strftime("%d %b %Y, %I:%M %p")
     )
 
-# =================================================
+# =====================================================
 # ROUTES — ADMIN
-# =================================================
+# =====================================================
 @app.route("/admin")
 def admin_home():
     if not is_admin():
@@ -152,8 +165,8 @@ def admin_training():
         return redirect(url_for("login"))
     return render_template("admin_training.html")
 
-# =================================================
+# =====================================================
 # RUN
-# =================================================
+# =====================================================
 if __name__ == "__main__":
     app.run()

@@ -99,7 +99,7 @@ branches = [
 ]
 
 def logged_in():
-    return "user" in session and session["user"] != "admin"
+    return "user" in session
 
 def is_admin():
     return session.get("user") == "admin"
@@ -117,7 +117,6 @@ def login():
 
         if u in users and users[u] == p:
             session["user"] = u
-            # 🔑 ADMIN GOES TO ADMIN PAGE
             if u == "admin":
                 return redirect(url_for("admin_home"))
             return redirect(url_for("dashboard"))
@@ -125,6 +124,7 @@ def login():
         flash("Invalid credentials", "danger")
 
     return render_template("login.html")
+
 
 
 @app.route("/logout")

@@ -58,7 +58,7 @@ def save_log(user_message, intent, entities, bot_response):
     conn.close()
 
 # --- Users & Dummy Data ---
-users = {"yesh": "srt123", "reddy": "bank123", "admin": "admin123"}
+users = {"yesh": "yesh123", "reddy": "bank123", "admin": "admin123"}
 
 account_profile = {"name": "Yesh", "number": "96182240", "type": "Savings", "balance": 75000.00}
 transactions = [

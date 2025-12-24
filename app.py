@@ -114,11 +114,18 @@ def login():
     if request.method == "POST":
         u = request.form.get("username", "").strip()
         p = request.form.get("password", "").strip()
+
         if u in users and users[u] == p:
             session["user"] = u
+            # 🔑 ADMIN GOES TO ADMIN PAGE
+            if u == "admin":
+                return redirect(url_for("admin_home"))
             return redirect(url_for("dashboard"))
+
         flash("Invalid credentials", "danger")
+
     return render_template("login.html")
+
 
 @app.route("/logout")
 def logout():
@@ -167,6 +174,28 @@ def chatbot():
         return redirect(url_for("login"))
     return render_template("chatbot.html",
                            now=datetime.now().strftime("%d %b %Y, %I:%M %p"))
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    if not logged_in():
+        return jsonify({"reply": "Please login to continue."})
+
+    data = request.get_json() or {}
+    message = data.get("message", "").lower()
+
+    # --- SIMPLE RULE-BASED RESPONSES (SAFE FALLBACK) ---
+    if "balance" in message:
+        reply = f"💰 Your current balance is ₹{account_profile['balance']:.2f}"
+    elif "loan" in message:
+        reply = "🏦 We offer Personal and Home loans. Visit the Loans page for details."
+    elif "card" in message:
+        reply = "💳 Your debit and credit cards are currently active."
+    elif "branch" in message:
+        reply = "📍 We have branches in Hyderabad, Bengaluru, and Mumbai."
+    else:
+        reply = "🤖 I can help with balance, loans, cards, branches, and transfers."
+
+    save_log(message, "chatbot", [], reply)
+    return jsonify({"reply": reply})
 
 @app.route("/admin")
 def admin_home():

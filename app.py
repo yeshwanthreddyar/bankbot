@@ -7,10 +7,12 @@ from datetime import datetime
 # =====================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-TEMPLATE_DIR = os.path.join(BASE_DIR, "bankbot", "templates")
-STATIC_DIR = os.path.join(BASE_DIR, "bankbot", "static")
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "bankbot", "templates"),
+    static_folder=os.path.join(BASE_DIR, "bankbot", "static")
+)
 
-app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.secret_key = "yesh_bank_secret_key"
 
 # =====================================================

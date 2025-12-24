@@ -82,8 +82,21 @@ user_accounts = {
             {"date": "2025-08-18", "desc": "Amazon Purchase", "amount": -2999.00},
             {"date": "2025-08-15", "desc": "Flipkart Refund", "amount": 1500.00},
             {"date": "2025-08-10", "desc": "Rent Payment", "amount": -15000.00},
-        ]
+        ],
+        "cards": {
+            "debit": {
+                "last4": "4321",
+                "status": "Active",
+                "limit": "₹50,000/day"
+            },
+            "credit": {
+                "last4": "9988",
+                "status": "Active",
+                "limit": "₹1,50,000"
+            }
+        }
     },
+
     "reddy": {
         "profile": {
             "name": "Reddy",
@@ -91,13 +104,20 @@ user_accounts = {
             "type": "Savings",
             "balance": 50000.00
         },
-        "transactions": []
+        "transactions": [],
+        "cards": {
+            "debit": {
+                "last4": "1122",
+                "status": "Active",
+                "limit": "₹30,000/day"
+            },
+            "credit": {
+                "last4": "3344",
+                "status": "Inactive",
+                "limit": "₹75,000"
+            }
+        }
     }
-}
-
-cards_info = {
-    "debit": {"status": "Active", "last4": "4321"},
-    "credit": {"status": "Active", "last4": "9988"}
 }
 
 loans_catalog = [
@@ -192,7 +212,14 @@ def loans():
 def cards():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template("cards.html", cards=cards_info)
+
+    data = current_user_data()
+    if not data or "cards" not in data:
+        flash("Card data not available", "danger")
+        return redirect(url_for("dashboard"))
+
+    return render_template("cards.html", cards=data["cards"])
+
 
 @app.route("/branches")
 def branches_page():

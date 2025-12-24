@@ -1,7 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from datetime import datetime
-import os, csv, random, sqlite3, pandas as pd
+import os, random, sqlite3, pandas as pd
 
+# ================= APP SETUP =================
 app = Flask(__name__)
 app.secret_key = "yesh_bank_secret_key"
 
@@ -56,64 +57,80 @@ def save_log(user_message, intent, bot_response):
     conn.close()
 
 # ================= DUMMY DATA =================
-users = {"yesh": "yesh123"}
+users = {
+    "yesh": "yesh123",
+    "reddy": "bank123"
+}
 
 account_profile = {
     "number": "96182240",
     "balance": 75000.00
 }
 
+# ================= HELPERS =================
 def logged_in():
     return "user" in session
 
 # ================= ROUTES =================
+
 @app.route("/")
 def home():
-    return "✅ BankBot is running successfully"
+    return redirect(url_for("login"))
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        u = request.form.get("username")
-        p = request.form.get("password")
+        u = request.form.get("username", "").strip()
+        p = request.form.get("password", "").strip()
         if users.get(u) == p:
             session["user"] = u
             return redirect(url_for("chatbot"))
-        flash("Invalid credentials")
+        flash("Invalid credentials", "danger")
     return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 @app.route("/chatbot")
 def chatbot():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template("chatbot.html")
+    return render_template(
+        "chatbot.html",
+        now=datetime.now().strftime("%d %b %Y, %I:%M %p")
+    )
 
 # ================= CHAT API =================
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     if not logged_in():
-        return jsonify({"reply": "Authentication error"})
+        return jsonify({"reply": "Authentication error", "intent": "error"})
 
-    message = request.get_json().get("message", "").strip()
+    message = request.get_json().get("message", "").strip().lower()
 
-    if "balance" in message.lower():
+    # ---- BALANCE FLOW ----
+    if session.get("state") == "awaiting_account":
+        if message == account_profile["number"]:
+            reply = f"💰 Your account balance is ₹{account_profile['balance']:.2f}"
+        else:
+            reply = "⚠️ Invalid account number. Try again."
+        session.pop("state", None)
+        save_log(message, "check_balance", reply)
+        return jsonify({"reply": reply, "intent": "check_balance"})
+
+    # ---- INTENT DETECTION ----
+    if "balance" in message:
         session["state"] = "awaiting_account"
         reply = "💰 Please enter your account number"
         save_log(message, "check_balance", reply)
-        return jsonify({"reply": reply})
+        return jsonify({"reply": reply, "intent": "check_balance"})
 
-    if session.get("state") == "awaiting_account":
-        if message == account_profile["number"]:
-            reply = f"💰 Your balance is ₹{account_profile['balance']:.2f}"
-        else:
-            reply = "⚠️ Invalid account number"
-        session.pop("state", None)
-        save_log(message, "check_balance", reply)
-        return jsonify({"reply": reply})
-
-    reply = "I can help with balance enquiries"
+    # ---- FALLBACK ----
+    reply = "I can help you check your account balance."
     save_log(message, "fallback", reply)
-    return jsonify({"reply": reply})
+    return jsonify({"reply": reply, "intent": "fallback"})
 
 # ================= RUN =================
 if __name__ == "__main__":

@@ -8,8 +8,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
     __name__,
-    template_folder=os.path.join(BASE_DIR, "bankbot", "templates"),
-    static_folder=os.path.join(BASE_DIR, "bankbot", "static")
+    template_folder="bankbot/templates",
+    static_folder="bankbot/static"
 )
 
 app.secret_key = "yesh_bank_secret_key"

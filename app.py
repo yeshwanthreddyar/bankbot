@@ -180,22 +180,94 @@ def api_chat():
         return jsonify({"reply": "Please login to continue."})
 
     data = request.get_json() or {}
-    message = data.get("message", "").lower()
+    message = data.get("message", "").strip().lower()
 
-    # --- SIMPLE RULE-BASED RESPONSES (SAFE FALLBACK) ---
-    if "balance" in message:
+    # --- Conversation state ---
+    state = session.get("chat_state")
+    transfer_data = session.get("transfer_data", {})
+
+    # ================= TRANSFER FLOW =================
+    if state == "awaiting_account":
+        transfer_data["account"] = message
+        session["transfer_data"] = transfer_data
+        session["chat_state"] = "awaiting_amount"
+        return jsonify({"reply": "💰 Please enter the amount to transfer."})
+
+    if state == "awaiting_amount":
+        try:
+            amount = float(message)
+        except ValueError:
+            return jsonify({"reply": "⚠️ Please enter a valid numeric amount."})
+
+        if amount <= 0:
+            return jsonify({"reply": "⚠️ Amount must be greater than zero."})
+
+        if amount > account_profile["balance"]:
+            session.pop("chat_state", None)
+            session.pop("transfer_data", None)
+            return jsonify({"reply": "❌ Insufficient balance for this transfer."})
+
+        # Perform transfer
+        account_profile["balance"] -= amount
+        transactions.insert(0, {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "desc": f"Transfer to A/C {transfer_data['account']}",
+            "amount": -amount
+        })
+
+        session.pop("chat_state", None)
+        session.pop("transfer_data", None)
+
+        reply = (
+            f"✅ Successfully transferred ₹{amount:.2f} "
+            f"to account {transfer_data['account']}.\n"
+            f"💰 New balance: ₹{account_profile['balance']:.2f}"
+        )
+
+        save_log(message, "transfer_money", [], reply)
+        return jsonify({"reply": reply})
+
+    # ================= NORMAL CHAT =================
+    if "transfer" in message or "send money" in message:
+        session["chat_state"] = "awaiting_account"
+        session["transfer_data"] = {}
+        return jsonify({"reply": "💸 Please enter the recipient account number."})
+
+    elif "balance" in message:
         reply = f"💰 Your current balance is ₹{account_profile['balance']:.2f}"
+
+    elif "transaction" in message:
+        if not transactions:
+            reply = "📭 You have no recent transactions."
+        else:
+            reply = "🧾 Recent Transactions:\n"
+            for t in transactions[:5]:
+                sign = "+" if t["amount"] > 0 else "-"
+                reply += f"{t['date']} | {t['desc']} | {sign}₹{abs(t['amount']):.2f}\n"
+
     elif "loan" in message:
         reply = "🏦 We offer Personal and Home loans. Visit the Loans page for details."
+
     elif "card" in message:
         reply = "💳 Your debit and credit cards are currently active."
+
     elif "branch" in message:
         reply = "📍 We have branches in Hyderabad, Bengaluru, and Mumbai."
+
     else:
-        reply = "🤖 I can help with balance, loans, cards, branches, and transfers."
+        reply = (
+            "🤖 I can help with:\n"
+            "- Balance\n"
+            "- Transactions\n"
+            "- Transfer money\n"
+            "- Loans\n"
+            "- Cards\n"
+            "- Branch details"
+        )
 
     save_log(message, "chatbot", [], reply)
     return jsonify({"reply": reply})
+
 
 @app.route("/admin")
 def admin_home():

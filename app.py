@@ -68,19 +68,32 @@ users = {
 }
 
 # ================= DUMMY DATA =================
-account_profile = {
-    "name": "Yesh",
-    "number": "96182240",
-    "type": "Savings",
-    "balance": 75000.00
+# ================= USER-SPECIFIC DATA =================
+user_accounts = {
+    "yesh": {
+        "profile": {
+            "name": "Yesh",
+            "number": "96182240",
+            "type": "Savings",
+            "balance": 75000.00
+        },
+        "transactions": [
+            {"date": "2025-08-20", "desc": "Zomato Order", "amount": -450.00},
+            {"date": "2025-08-18", "desc": "Amazon Purchase", "amount": -2999.00},
+            {"date": "2025-08-15", "desc": "Flipkart Refund", "amount": 1500.00},
+            {"date": "2025-08-10", "desc": "Rent Payment", "amount": -15000.00},
+        ]
+    },
+    "reddy": {
+        "profile": {
+            "name": "Reddy",
+            "number": "96182241",
+            "type": "Savings",
+            "balance": 50000.00
+        },
+        "transactions": []
+    }
 }
-
-transactions = [
-    {"date": "2025-08-20", "desc": "Zomato Order", "amount": -450.00},
-    {"date": "2025-08-18", "desc": "Amazon Purchase", "amount": -2999.00},
-    {"date": "2025-08-15", "desc": "Flipkart Refund", "amount": 1500.00},
-    {"date": "2025-08-10", "desc": "Rent Payment", "amount": -15000.00},
-]
 
 cards_info = {
     "debit": {"status": "Active", "last4": "4321"},

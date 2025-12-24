@@ -1,84 +1,72 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from datetime import datetime
-import os, random, sqlite3, pandas as pd
+import sqlite3, os, csv, random, pandas as pd
 
-app = Flask(__name__)
+# ================= APP CONFIG =================
+app = Flask(
+    __name__,
+    template_folder="bankbot/templates",
+    static_folder="bankbot/static"
+)
 app.secret_key = "yesh_bank_secret_key"
 
-# ================= SAFE SPACY LOADING =================
-try:
-    import spacy
-    try:
-        nlp_model = spacy.load("bank_nlu_model")
-    except:
-        nlp_model = spacy.blank("en")
-except:
-    nlp_model = None
+# ================= USERS =================
+users = {
+    "yesh": "yesh123",
+    "reddy": "bank123",
+    "admin": "admin123"
+}
 
-# ================= LOAD RESPONSES =================
-responses_dict = {}
-
-def load_responses():
-    if not os.path.exists("training_and_responses.csv"):
-        return
-    df = pd.read_csv(
-        "training_and_responses.csv",
-        header=None,
-        names=["example", "intent", "response", "source"],
-        on_bad_lines="skip"
-    )
-    for _, row in df.iterrows():
-        responses_dict.setdefault(row["intent"], []).append(row["response"])
-
-load_responses()
-
-# ================= DATABASE LOGGING =================
-def save_log(user_message, intent, bot_response):
-    conn = sqlite3.connect("logs.db")
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_message TEXT,
-            intent TEXT,
-            bot_response TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    cur.execute(
-        "INSERT INTO logs (user_message, intent, bot_response) VALUES (?, ?, ?)",
-        (user_message, intent, bot_response)
-    )
-    conn.commit()
-    conn.close()
-
-# ================= DUMMY DATA =================
-users = {"yesh": "yesh123", "reddy": "bank123"}
-
+# ================= DATA =================
 account_profile = {
     "name": "Yesh",
     "number": "96182240",
+    "type": "Savings",
     "balance": 75000.00
 }
 
+transactions = [
+    {"date": "2025-08-20", "desc": "Zomato Order", "amount": -450},
+    {"date": "2025-08-18", "desc": "Amazon Purchase", "amount": -2999},
+    {"date": "2025-08-15", "desc": "Flipkart Refund", "amount": 1500},
+]
+
+cards_info = {
+    "debit": {"status": "Active", "last4": "4321"},
+    "credit": {"status": "Active", "last4": "9988"}
+}
+
+loans_catalog = [
+    {"type": "Personal Loan", "rate": "11.25% p.a."},
+    {"type": "Home Loan", "rate": "8.50% p.a."}
+]
+
+branches = [
+    {"city": "Hyderabad", "name": "Yesh Bank - HiTech City", "ifsc": "YESHB0000123"},
+    {"city": "Bengaluru", "name": "Yesh Bank - Indiranagar", "ifsc": "YESHB0000456"},
+]
+
 # ================= HELPERS =================
 def logged_in():
-    return "user" in session
+    return "user" in session and session["user"] != "admin"
+
+def is_admin():
+    return session.get("user") == "admin"
 
 # ================= ROUTES =================
 
 @app.route("/")
-def home():
-    return redirect(url_for("login"))
+def index():
+    return render_template("index.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        u = request.form.get("username", "").strip()
-        p = request.form.get("password", "").strip()
+        u = request.form.get("username")
+        p = request.form.get("password")
         if users.get(u) == p:
             session["user"] = u
-            return redirect(url_for("dashboard"))
+            return redirect(url_for("dashboard" if u != "admin" else "admin_home"))
         flash("Invalid credentials", "danger")
     return render_template("login.html")
 
@@ -87,53 +75,81 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# ✅ FIXED: DASHBOARD ROUTE
 @app.route("/dashboard")
 def dashboard():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template(
-        "dashboard.html",
-        user=session["user"],
-        balance=account_profile["balance"]
-    )
+    return render_template("dashboard.html", user=session["user"])
+
+@app.route("/balance")
+def balance():
+    if not logged_in():
+        return redirect(url_for("login"))
+    return render_template("balance.html", profile=account_profile)
+
+@app.route("/transactions")
+def transactions_page():
+    if not logged_in():
+        return redirect(url_for("login"))
+    return render_template("transactions.html", txns=transactions)
+
+@app.route("/cards")
+def cards():
+    if not logged_in():
+        return redirect(url_for("login"))
+    return render_template("cards.html", cards=cards_info)
+
+@app.route("/loans")
+def loans():
+    if not logged_in():
+        return redirect(url_for("login"))
+    return render_template("loans.html", loans=loans_catalog)
+
+@app.route("/branches")
+def branches_page():
+    if not logged_in():
+        return redirect(url_for("login"))
+    return render_template("branches.html", branches=branches)
 
 @app.route("/chatbot")
 def chatbot():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template(
-        "chatbot.html",
-        now=datetime.now().strftime("%d %b %Y, %I:%M %p")
-    )
+    return render_template("chatbot.html", now=datetime.now().strftime("%d %b %Y, %I:%M %p"))
+
+# ================= ADMIN =================
+
+@app.route("/admin")
+def admin_home():
+    if not is_admin():
+        return redirect(url_for("login"))
+    return render_template("admin_home.html")
+
+@app.route("/admin/logs")
+def admin_logs():
+    if not is_admin():
+        return redirect(url_for("login"))
+    return render_template("admin_logs.html")
+
+@app.route("/admin/training")
+def admin_training():
+    if not is_admin():
+        return redirect(url_for("login"))
+    return render_template("admin_training.html")
 
 # ================= CHAT API =================
+
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     if not logged_in():
-        return jsonify({"reply": "Authentication error", "intent": "error"})
+        return jsonify({"reply": "Authentication error"})
 
-    message = request.get_json().get("message", "").strip().lower()
-
-    # ---- BALANCE FLOW ----
-    if session.get("state") == "awaiting_account":
-        if message == account_profile["number"]:
-            reply = f"💰 Your account balance is ₹{account_profile['balance']:.2f}"
-        else:
-            reply = "⚠️ Invalid account number. Try again."
-        session.pop("state", None)
-        save_log(message, "check_balance", reply)
-        return jsonify({"reply": reply, "intent": "check_balance"})
+    message = request.get_json().get("message", "").lower()
 
     if "balance" in message:
-        session["state"] = "awaiting_account"
-        reply = "💰 Please enter your account number"
-        save_log(message, "check_balance", reply)
-        return jsonify({"reply": reply, "intent": "check_balance"})
+        return jsonify({"reply": f"💰 Your balance is ₹{account_profile['balance']:.2f}"})
 
-    reply = "I can help you check your balance."
-    save_log(message, "fallback", reply)
-    return jsonify({"reply": reply, "intent": "fallback"})
+    return jsonify({"reply": "I can help with banking services."})
 
 # ================= RUN =================
 if __name__ == "__main__":

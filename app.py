@@ -1,8 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from datetime import datetime
-import sqlite3, os, csv, random, pandas as pd
 
-# ================= APP CONFIG =================
+# =================================================
+# APP CONFIG — IMPORTANT
+# =================================================
 app = Flask(
     __name__,
     template_folder="bankbot/templates",
@@ -10,14 +11,18 @@ app = Flask(
 )
 app.secret_key = "yesh_bank_secret_key"
 
-# ================= USERS =================
+# =================================================
+# DUMMY USERS
+# =================================================
 users = {
     "yesh": "yesh123",
     "reddy": "bank123",
     "admin": "admin123"
 }
 
-# ================= DATA =================
+# =================================================
+# DATA
+# =================================================
 account_profile = {
     "name": "Yesh",
     "number": "96182240",
@@ -46,15 +51,18 @@ branches = [
     {"city": "Bengaluru", "name": "Yesh Bank - Indiranagar", "ifsc": "YESHB0000456"},
 ]
 
-# ================= HELPERS =================
+# =================================================
+# HELPERS
+# =================================================
 def logged_in():
     return "user" in session and session["user"] != "admin"
 
 def is_admin():
     return session.get("user") == "admin"
 
-# ================= ROUTES =================
-
+# =================================================
+# ROUTES — PUBLIC
+# =================================================
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -75,6 +83,9 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+# =================================================
+# ROUTES — USER PAGES
+# =================================================
 @app.route("/dashboard")
 def dashboard():
     if not logged_in():
@@ -115,10 +126,14 @@ def branches_page():
 def chatbot():
     if not logged_in():
         return redirect(url_for("login"))
-    return render_template("chatbot.html", now=datetime.now().strftime("%d %b %Y, %I:%M %p"))
+    return render_template(
+        "chatbot.html",
+        now=datetime.now().strftime("%d %b %Y, %I:%M %p")
+    )
 
-# ================= ADMIN =================
-
+# =================================================
+# ROUTES — ADMIN
+# =================================================
 @app.route("/admin")
 def admin_home():
     if not is_admin():
@@ -137,20 +152,8 @@ def admin_training():
         return redirect(url_for("login"))
     return render_template("admin_training.html")
 
-# ================= CHAT API =================
-
-@app.route("/api/chat", methods=["POST"])
-def api_chat():
-    if not logged_in():
-        return jsonify({"reply": "Authentication error"})
-
-    message = request.get_json().get("message", "").lower()
-
-    if "balance" in message:
-        return jsonify({"reply": f"💰 Your balance is ₹{account_profile['balance']:.2f}"})
-
-    return jsonify({"reply": "I can help with banking services."})
-
-# ================= RUN =================
+# =================================================
+# RUN
+# =================================================
 if __name__ == "__main__":
     app.run()

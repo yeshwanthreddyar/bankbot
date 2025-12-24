@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from datetime import datetime
 import os, random, sqlite3, pandas as pd
 
-# ================= APP SETUP =================
 app = Flask(__name__)
 app.secret_key = "yesh_bank_secret_key"
 
@@ -11,13 +10,10 @@ try:
     import spacy
     try:
         nlp_model = spacy.load("bank_nlu_model")
-        print("✅ Custom spaCy model loaded")
     except:
         nlp_model = spacy.blank("en")
-        print("⚠️ Using blank spaCy model")
 except:
     nlp_model = None
-    print("❌ spaCy not available")
 
 # ================= LOAD RESPONSES =================
 responses_dict = {}
@@ -57,12 +53,10 @@ def save_log(user_message, intent, bot_response):
     conn.close()
 
 # ================= DUMMY DATA =================
-users = {
-    "yesh": "yesh123",
-    "reddy": "bank123"
-}
+users = {"yesh": "yesh123", "reddy": "bank123"}
 
 account_profile = {
+    "name": "Yesh",
     "number": "96182240",
     "balance": 75000.00
 }
@@ -84,7 +78,7 @@ def login():
         p = request.form.get("password", "").strip()
         if users.get(u) == p:
             session["user"] = u
-            return redirect(url_for("chatbot"))
+            return redirect(url_for("dashboard"))
         flash("Invalid credentials", "danger")
     return render_template("login.html")
 
@@ -92,6 +86,17 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+# ✅ FIXED: DASHBOARD ROUTE
+@app.route("/dashboard")
+def dashboard():
+    if not logged_in():
+        return redirect(url_for("login"))
+    return render_template(
+        "dashboard.html",
+        user=session["user"],
+        balance=account_profile["balance"]
+    )
 
 @app.route("/chatbot")
 def chatbot():
@@ -120,15 +125,13 @@ def api_chat():
         save_log(message, "check_balance", reply)
         return jsonify({"reply": reply, "intent": "check_balance"})
 
-    # ---- INTENT DETECTION ----
     if "balance" in message:
         session["state"] = "awaiting_account"
         reply = "💰 Please enter your account number"
         save_log(message, "check_balance", reply)
         return jsonify({"reply": reply, "intent": "check_balance"})
 
-    # ---- FALLBACK ----
-    reply = "I can help you check your account balance."
+    reply = "I can help you check your balance."
     save_log(message, "fallback", reply)
     return jsonify({"reply": reply, "intent": "fallback"})
 

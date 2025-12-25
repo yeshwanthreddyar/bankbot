@@ -282,23 +282,19 @@ def api_chat():
         if amount <= 0:
             return jsonify({"reply": "⚠️ Amount must be greater than zero."})
 
-        if amount > account_profile["balance"]:
-            session.pop("chat_state", None)
-            session.pop("transfer_data", None)
-            return jsonify({"reply": "❌ Insufficient balance for this transfer."})
-
         # Perform transfer
-       if amount > profile["balance"]:
+        if amount > profile["balance"]:
             session.pop("chat_state", None)
             session.pop("transfer_data", None)
             return jsonify({"reply": "❌ Insufficient balance for this transfer."})
 
-       profile["balance"] -= amount
-       transactions.insert(0, {
-       "date": datetime.now().strftime("%Y-%m-%d"),
-       "desc": f"Transfer to A/C {transfer_data['account']}",
-       "amount": -amount
-       })
+        profile["balance"] -= amount
+        transactions.insert(0, {
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "desc": f"Transfer to A/C {transfer_data['account']}",
+        "amount": -amount
+        })
+
 
 
         session.pop("chat_state", None)
@@ -307,8 +303,9 @@ def api_chat():
         reply = (
             f"✅ Successfully transferred ₹{amount:.2f} "
             f"to account {transfer_data['account']}.\n"
-            f"💰 New balance: ₹{account_profile['balance']:.2f}"
+            f"💰 New balance: ₹{profile['balance']:.2f}"
         )
+
 
         save_log(message, "transfer_money", [], reply)
         return jsonify({"reply": reply})
@@ -320,7 +317,7 @@ def api_chat():
         return jsonify({"reply": "💸 Please enter the recipient account number."})
 
     elif "balance" in message:
-        reply = f"💰 Your current balance is ₹{account_profile['balance']:.2f}"
+        reply = f"💰 Your current balance is ₹{profile['balance']:.2f}"
 
     elif "transaction" in message:
         if not transactions:
@@ -428,7 +425,12 @@ def retrain_model():
         return redirect(url_for("login"))
 
     try:
-        subprocess.Popen(["python", "train.py"])
+        subprocess.Popen(
+            ["python", "train.py"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
         flash("🔄 Model retraining started in background", "success")
     except Exception as e:
         flash(f"❌ Failed to start retraining: {e}", "danger")

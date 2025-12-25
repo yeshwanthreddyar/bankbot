@@ -258,6 +258,13 @@ def api_chat():
     # --- Conversation state ---
     state = session.get("chat_state")
     transfer_data = session.get("transfer_data", {})
+    user_data = current_user_data()
+    if not user_data:
+        return jsonify({"reply": "User data not found."})
+
+    profile = user_data["profile"]
+    transactions = user_data["transactions"]
+
 
     # ================= TRANSFER FLOW =================
     if state == "awaiting_account":
@@ -281,12 +288,18 @@ def api_chat():
             return jsonify({"reply": "❌ Insufficient balance for this transfer."})
 
         # Perform transfer
-        account_profile["balance"] -= amount
-        transactions.insert(0, {
-            "date": datetime.now().strftime("%Y-%m-%d"),
-            "desc": f"Transfer to A/C {transfer_data['account']}",
-            "amount": -amount
-        })
+       if amount > profile["balance"]:
+            session.pop("chat_state", None)
+            session.pop("transfer_data", None)
+            return jsonify({"reply": "❌ Insufficient balance for this transfer."})
+
+       profile["balance"] -= amount
+       transactions.insert(0, {
+       "date": datetime.now().strftime("%Y-%m-%d"),
+       "desc": f"Transfer to A/C {transfer_data['account']}",
+       "amount": -amount
+       })
+
 
         session.pop("chat_state", None)
         session.pop("transfer_data", None)

@@ -199,7 +199,21 @@ def transactions_page():
         flash("User data not found", "danger")
         return redirect(url_for("dashboard"))
 
-    return render_template("transactions.html", txns=data["transactions"])
+    txns_with_balance = []
+    running_balance = data["profile"]["balance"]
+
+    # reverse to calculate correctly
+    for txn in reversed(data["transactions"]):
+        running_balance -= txn["amount"]
+        t = txn.copy()
+        t["balance"] = running_balance
+        txns_with_balance.append(t)
+
+    # restore original order
+    txns_with_balance.reverse()
+
+    return render_template("transactions.html", txns=txns_with_balance)
+
 
 
 @app.route("/loans")
